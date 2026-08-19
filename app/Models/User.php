@@ -56,4 +56,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(Task::class);
     }
+
+    /**
+     * Relasi ke Mata Kuliah (satu user dapat memiliki banyak mata kuliah).
+     */
+    public function courses(): HasMany
+    {
+        return $this->hasMany(Course::class);
+    }
 }

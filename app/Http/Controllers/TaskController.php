@@ -3,33 +3,93 @@
 namespace App\Http\Controllers;
 
 use App\Models\Task;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Routing\Controllers\HasMiddleware;
-use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class TaskController extends Controller
 {
     /**
-     * Menampilkan daftar tugas milik user yang sedang login.
+     * Menampilkan daftar tugas dengan fitur Pencarian, Filter Mata Kuliah, Status, dan Urgensi.
      */
     public function index(Request $request): View
     {
-        $tasks = $request->user()
-            ->tasks()
-            ->latest()
+        $user = $request->user();
+
+        $query = $user->tasks()->with('course');
+
+        // Filter Pencarian (Keyword di Title atau Description)
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%")
+                    ->orWhereHas('course', function ($cq) use ($search) {
+                        $cq->where('name', 'like', "%{$search}%")
+                            ->orWhere('code', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        // Filter berdasarkan Status
+        if ($request->filled('status') && in_array($request->status, ['pending', 'completed'])) {
+            $query->where('status', $request->status);
+        }
+
+        // Filter berdasarkan Mata Kuliah
+        if ($request->filled('course_id')) {
+            $query->where('course_id', $request->course_id);
+        }
+
+        // Filter berdasarkan Prioritas
+        if ($request->filled('priority') && in_array($request->priority, ['low', 'medium', 'high'])) {
+            $query->where('priority', $request->priority);
+        }
+
+        // Filter berdasarkan Urgensi Deadline
+        if ($request->filled('urgency')) {
+            $today = Carbon::today()->toDateString();
+            $endOfWeek = Carbon::today()->addDays(7)->toDateString();
+
+            if ($request->urgency === 'overdue') {
+                $query->where('status', 'pending')
+                    ->where('deadline', '<', $today);
+            } elseif ($request->urgency === 'today') {
+                $query->where('status', 'pending')
+                    ->where('deadline', '=', $today);
+            } elseif ($request->urgency === 'this_week') {
+                $query->where('status', 'pending')
+                    ->whereBetween('deadline', [$today, $endOfWeek]);
+            }
+        }
+
+        // Sorting: default urutkan berdasarkan deadline terdekat, lalu prioritas
+        $tasks = $query->orderBy('deadline', 'asc')
+            ->orderByRaw("FIELD(priority, 'high', 'medium', 'low')")
             ->get();
 
-        return view('tasks.index', compact('tasks'));
+        // Ambil daftar mata kuliah milik user untuk dropdown filter
+        $courses = $user->courses()->orderBy('name')->get();
+
+        // Hitung statistik ringkas untuk header
+        $totalCount = $user->tasks()->count();
+        $pendingCount = $user->tasks()->where('status', 'pending')->count();
+        $completedCount = $user->tasks()->where('status', 'completed')->count();
+        $overdueCount = $user->tasks()->where('status', 'pending')->where('deadline', '<', Carbon::today()->toDateString())->count();
+
+        return view('tasks.index', compact('tasks', 'courses', 'totalCount', 'pendingCount', 'completedCount', 'overdueCount'));
     }
 
     /**
      * Menampilkan form untuk membuat tugas baru.
      */
-    public function create(): View
+    public function create(Request $request): View
     {
-        return view('tasks.create');
+        $courses = $request->user()->courses()->orderBy('name')->get();
+
+        return view('tasks.create', compact('courses'));
     }
 
     /**
@@ -37,14 +97,27 @@ class TaskController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        $user = $request->user();
+
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
+            'course_id' => [
+                'nullable',
+                Rule::exists('courses', 'id')->where(function ($query) use ($user) {
+                    $query->where('user_id', $user->id);
+                }),
+            ],
             'description' => ['nullable', 'string'],
             'deadline' => ['required', 'date'],
             'status' => ['nullable', 'in:pending,completed'],
+            'priority' => ['required', 'in:low,medium,high'],
+        ], [
+            'title.required' => 'Judul tugas wajib diisi.',
+            'deadline.required' => 'Batas waktu (deadline) wajib diisi.',
+            'course_id.exists' => 'Mata kuliah yang dipilih tidak valid.',
         ]);
 
-        $request->user()->tasks()->create($validated);
+        $user->tasks()->create($validated);
 
         return redirect()
             ->route('tasks.index')
@@ -54,11 +127,13 @@ class TaskController extends Controller
     /**
      * Menampilkan form edit untuk tugas tertentu.
      */
-    public function edit(Task $task): View
+    public function edit(Request $request, Task $task): View
     {
         abort_if($task->user_id !== auth()->id(), 403, 'Akses ditolak. Anda bukan pemilik tugas ini.');
 
-        return view('tasks.edit', compact('task'));
+        $courses = $request->user()->courses()->orderBy('name')->get();
+
+        return view('tasks.edit', compact('task', 'courses'));
     }
 
     /**
@@ -68,11 +143,24 @@ class TaskController extends Controller
     {
         abort_if($task->user_id !== auth()->id(), 403, 'Akses ditolak. Anda bukan pemilik tugas ini.');
 
+        $user = $request->user();
+
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
+            'course_id' => [
+                'nullable',
+                Rule::exists('courses', 'id')->where(function ($query) use ($user) {
+                    $query->where('user_id', $user->id);
+                }),
+            ],
             'description' => ['nullable', 'string'],
             'deadline' => ['required', 'date'],
             'status' => ['required', 'in:pending,completed'],
+            'priority' => ['required', 'in:low,medium,high'],
+        ], [
+            'title.required' => 'Judul tugas wajib diisi.',
+            'deadline.required' => 'Batas waktu (deadline) wajib diisi.',
+            'course_id.exists' => 'Mata kuliah yang dipilih tidak valid.',
         ]);
 
         $task->update($validated);
