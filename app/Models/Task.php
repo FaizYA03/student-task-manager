@@ -139,4 +139,40 @@ class Task extends Model
             default => 'bg-amber-50 text-amber-700 border-amber-200',
         };
     }
+
+    /**
+     * Label teks deskriptif status tugas.
+     */
+    public function getStatusLabelAttribute(): string
+    {
+        return match ($this->status) {
+            'in_progress' => 'Sedang Dikerjakan',
+            'completed' => 'Selesai',
+            default => 'Belum Dimulai',
+        };
+    }
+
+    /**
+     * Badge styling Tailwind CSS untuk status tugas.
+     */
+    public function getStatusBadgeClassesAttribute(): string
+    {
+        return match ($this->status) {
+            'in_progress' => 'bg-sky-50 text-sky-700 border-sky-200',
+            'completed' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
+            default => 'bg-amber-50 text-amber-700 border-amber-200',
+        };
+    }
+
+    /**
+     * Dot indicator Tailwind CSS untuk status tugas.
+     */
+    public function getStatusDotClassAttribute(): string
+    {
+        return match ($this->status) {
+            'in_progress' => 'bg-sky-500 animate-pulse',
+            'completed' => 'bg-emerald-500',
+            default => 'bg-amber-500 animate-pulse',
+        };
+    }
 }

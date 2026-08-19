@@ -22,6 +22,11 @@ Route::middleware('guest')->group(function () {
 // Rute untuk Mahasiswa yang Terautentikasi (Sudah Login)
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+
+    // Endpoint Khusus Multi-View Tasks (Calendar & Kanban Drag-and-Drop)
+    Route::get('/tasks/calendar-events', [TaskController::class, 'calendarEvents'])->name('tasks.calendar-events');
+    Route::patch('/tasks/{task}/status', [TaskController::class, 'updateStatus'])->name('tasks.update-status');
+
     Route::resource('tasks', TaskController::class)->except(['show']);
     Route::resource('courses', CourseController::class)->except(['show', 'create', 'edit']);
 });

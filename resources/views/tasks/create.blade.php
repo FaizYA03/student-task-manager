@@ -154,8 +154,9 @@
                         id="status"
                         class="w-full px-4 py-2.5 bg-slate-50 border @error('status') border-rose-400 bg-rose-50/30 @else border-slate-200 @enderror rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
                     >
-                        <option value="pending" {{ old('status') == 'pending' ? 'selected' : '' }}>Pending (Belum Selesai)</option>
-                        <option value="completed" {{ old('status') == 'completed' ? 'selected' : '' }}>Completed (Sudah Selesai)</option>
+                        <option value="pending" {{ old('status', 'pending') === 'pending' ? 'selected' : '' }}>To Do (Belum Dimulai)</option>
+                        <option value="in_progress" {{ old('status') === 'in_progress' ? 'selected' : '' }}>In Progress (Sedang Dikerjakan)</option>
+                        <option value="completed" {{ old('status') === 'completed' ? 'selected' : '' }}>Completed (Sudah Selesai)</option>
                     </select>
                     @error('status')
                         <p class="text-xs text-rose-600 mt-1.5 font-medium">{{ $message }}</p>
